@@ -1,6 +1,7 @@
-import numpy as np
+from videorecorder import VideoRecorder
 import cv2
 from datetime import datetime, timedelta
+import numpy as np
 refPt = []
 cropping = False
 
@@ -21,19 +22,22 @@ def click_and_crop(event, x, y, flags, param):
         # the cropping operation is finished
         refPt.append((x, y))
         cropping = False
-
-
 def has_changed(prev_roi, actual_roi):
-    diff_a = actual_roi-prev_roi
-    print(diff_a.max())
-    return diff_a.max() > 20
+    prev_roi = cv2.cvtColor(prev_roi, cv2.COLOR_BGR2GRAY)
+    actual_roi = cv2.cvtColor(actual_roi, cv2.COLOR_BGR2GRAY)
+
+    err = np.sum((prev_roi.astype("float") - actual_roi.astype("float")) ** 2)
+    err /= float(prev_roi.shape[0] * prev_roi.shape[1])
+    print(err)
+    return err > 80
 
 start = datetime.now()
 cap = cv2.VideoCapture(0)
+recorder = VideoRecorder(cap)
 show = True
 running = True
 started = False
-first_roi = True
+first_roi = 30
 prev_roi = None
 cv2.namedWindow("image")
 cv2.setMouseCallback("image", click_and_crop)
@@ -42,7 +46,8 @@ while show:
     ret, frame = cap.read()
 
     # Our operations on the frame come here
-    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+    #gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+    gray = frame
     if running:
         actual = datetime.now()
     if started:
@@ -52,17 +57,17 @@ while show:
     diff_str = str(diff)
     font = cv2.FONT_HERSHEY_SIMPLEX
     cv2.putText(gray, diff_str,(10,30), font, 1,(255,255,255),2,cv2.LINE_AA)
+    recorder.write(gray)
     if len(refPt) == 2:
         clone = gray.copy()
         roi = clone[refPt[0][1]:refPt[1][1], refPt[0][0]:refPt[1][0]]
         cv2.rectangle(gray,(refPt[0][0],refPt[0][1]),(refPt[1][0],refPt[1][1]),(0,255,0),1)
-        cv2.imshow("ROI", roi)
+        #cv2.imshow("ROI", roi)
         if first_roi:
-            first_roi = False
+            first_roi -= 1
         else:
             if has_changed(prev_roi, roi):
                 started = True
-        prev_roi = roi
         prev_roi = roi
 
     # Display the resulting frame
@@ -75,5 +80,6 @@ while show:
             running = False
 
 # When everything done, release the capture
+recorder.release()
 cap.release()
 cv2.destroyAllWindows()
